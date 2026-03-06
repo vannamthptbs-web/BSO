@@ -1,0 +1,5 @@
+{
+  "name": "Hệ thống Đánh giá KPI Giáo viên - THPT Bình Sơn",
+  "description": "Ứng dụng đánh giá, xếp loại chất lượng viên chức và người lao động theo quy định của Trường THPT Bình Sơn, tích hợp lưu trữ Google Sheets.",
+  "requestFramePermissions": []
+}
