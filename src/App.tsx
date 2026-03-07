@@ -321,12 +321,40 @@ export default function App() {
             </p>
           </div>
           
-          {user.role === 'admin' && !isGoogleConnected && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-800 rounded border border-amber-200 text-xs font-medium">
-              <AlertCircle size={14} />
-              Cần kết nối Google để lưu dữ liệu
-            </div>
-          )}
+          <div className="flex items-center gap-4">
+            {user.role === 'admin' && view === 'dashboard' && (
+              <button 
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/admin/export-teachers');
+                    const data = await res.json();
+                    const csvContent = "data:text/csv;charset=utf-8," 
+                      + "Họ và tên,Tên đăng nhập,Mật khẩu,Vai trò\n"
+                      + data.map((t: any) => `${t.name},${t.username},${t.password},${t.role}`).join("\n");
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", "danh_sach_giao_vien.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  } catch (e) {
+                    console.error("Export failed", e);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-all shadow-md text-sm font-bold uppercase tracking-widest"
+              >
+                <FileText size={16} />
+                Xuất danh sách
+              </button>
+            )}
+            {user.role === 'admin' && !isGoogleConnected && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-800 rounded border border-amber-200 text-xs font-medium">
+                <AlertCircle size={14} />
+                Cần kết nối Google để lưu dữ liệu
+              </div>
+            )}
+          </div>
         </header>
 
         <AnimatePresence mode="wait">

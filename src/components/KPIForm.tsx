@@ -10,7 +10,8 @@ import {
   Plus,
   Minus,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Users
 } from 'lucide-react';
 import { GENERAL_TASKS, PROFESSIONAL_TASKS, BONUS_CRITERIA } from '../constants/kpi-template';
 import { clsx, type ClassValue } from 'clsx';
@@ -64,7 +65,31 @@ export default function KPIForm({ teacher, user, onBack, onSuccess }: KPIFormPro
     initialData?.rawBonus || {}
   );
   const [loading, setLoading] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    setAnalysis(null);
+    try {
+      const res = await fetch('/api/gemini/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { scores, bonusPoints, totals: roleScores.self } })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAnalysis(data.analysis);
+      } else {
+        throw new Error(data.error || 'Phân tích thất bại');
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   // Flatten criteria for easier processing
   const allCriteria = useMemo(() => {
@@ -260,6 +285,13 @@ export default function KPIForm({ teacher, user, onBack, onSuccess }: KPIFormPro
             />
           </div>
           <button 
+            onClick={handleAnalyze}
+            disabled={analyzing}
+            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2.5 text-sm font-bold uppercase tracking-widest rounded-lg hover:opacity-90 shadow-md transition-all disabled:opacity-50"
+          >
+            {analyzing ? 'Đang phân tích...' : <><Users size={18} /> Phân tích AI</>}
+          </button>
+          <button 
             onClick={() => handleSave(true)}
             disabled={loading}
             className="flex items-center gap-2 bg-primary text-white px-8 py-2.5 text-sm font-bold uppercase tracking-widest rounded-lg hover:opacity-90 shadow-md transition-all disabled:opacity-50"
@@ -268,6 +300,18 @@ export default function KPIForm({ teacher, user, onBack, onSuccess }: KPIFormPro
           </button>
         </div>
       </div>
+
+      {analysis && (
+        <div className="mb-8 p-6 bg-indigo-50 border border-indigo-100 rounded-xl shadow-sm">
+          <h4 className="text-indigo-900 font-bold uppercase tracking-widest text-xs mb-3 flex items-center gap-2">
+            <Users size={14} />
+            Phân tích từ Gemini AI
+          </h4>
+          <div className="text-sm text-indigo-800 leading-relaxed whitespace-pre-wrap italic">
+            {analysis}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="mb-8 p-4 bg-red-50 border border-red-200 text-red-800 rounded flex items-center gap-3">
