@@ -25,7 +25,8 @@ db.exec(`
     username TEXT UNIQUE,
     password TEXT,
     role TEXT DEFAULT 'teacher',
-    sheet_id TEXT
+    sheet_id TEXT,
+    total_score REAL
   );
   CREATE TABLE IF NOT EXISTS assessments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,12 +43,25 @@ db.exec(`
   );
 `);
 
+// Ensure total_score column exists in teachers table (for existing databases)
+try {
+  db.exec("ALTER TABLE teachers ADD COLUMN total_score REAL");
+} catch (e) {
+  // Column might already exist
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json());
   const PORT = Number(process.env.PORT) || 3000;
 
   console.log(`Starting server using SQLite...`);
+
+  // Middleware to log requests
+  app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+  });
 
   app.get("/api/health", (req, res) => {
     res.json({ 
@@ -198,7 +212,7 @@ async function startServer() {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)").run('google_tokens', JSON.stringify(tokens));
       res.send(`<html><body><script>if(window.opener){window.opener.postMessage({type:'OAUTH_AUTH_SUCCESS'},'*');window.close();}else{window.location.href='/';}</script></body></html>`);
     } catch (error) {
-      res.status(500).send("Auth failed");
+      res.status(500).send("Xác thực thất bại");
     }
   });
 
@@ -208,7 +222,7 @@ async function startServer() {
       const client = await getGoogleClient();
       const sheets = client ? google.sheets({ version: "v4", auth: client }) : null;
       const teacher = db.prepare("SELECT * FROM teachers WHERE id = ?").get(teacherId);
-      if (!teacher) return res.status(404).json({ error: "Not found" });
+      if (!teacher) return res.status(404).json({ error: "Không tìm thấy giáo viên" });
 
       let spreadsheetId = teacher.sheet_id;
       if (sheets) {
@@ -224,7 +238,12 @@ async function startServer() {
       }
 
       const assessmentData = JSON.stringify({ scores, rawScores, rawBonus, totals, isFinal, quarter, year });
-      db.prepare("INSERT INTO assessments (teacher_id, quarter, year, total_score, data) VALUES (?, ?, ?, ?, ?)").run(teacherId, quarter, year, totals.boss || totals.lead || totals.self, assessmentData);
+      const finalScore = totals.boss || totals.lead || totals.self;
+      db.prepare("INSERT INTO assessments (teacher_id, quarter, year, total_score, data) VALUES (?, ?, ?, ?, ?)").run(teacherId, quarter, year, finalScore, assessmentData);
+      
+      // Update the teacher's total_score in the teachers table
+      db.prepare("UPDATE teachers SET total_score = ? WHERE id = ?").run(finalScore, teacherId);
+      
       res.json({ success: true, spreadsheetId });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -235,10 +254,10 @@ async function startServer() {
     const { teacherId, quarter, year } = req.body;
     try {
       const client = await getGoogleClient();
-      if (!client) return res.status(400).json({ error: "Google not connected" });
+      if (!client) return res.status(400).json({ error: "Chưa kết nối Google" });
       const sheets = google.sheets({ version: "v4", auth: client });
       const teacher = db.prepare("SELECT * FROM teachers WHERE id = ?").get(teacherId);
-      if (!teacher || !teacher.sheet_id) return res.status(404).json({ error: "No sheet" });
+      if (!teacher || !teacher.sheet_id) return res.status(404).json({ error: "Không tìm thấy bảng tính" });
       const response = await sheets.spreadsheets.values.get({ spreadsheetId: teacher.sheet_id, range: `Quý ${quarter} - ${year}!A1:E100` });
       res.json({ rows: response.data.values });
     } catch (error: any) {
